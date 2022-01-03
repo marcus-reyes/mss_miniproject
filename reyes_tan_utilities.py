@@ -90,7 +90,9 @@ def spec2wav(input, config_s2w):
 	
 	
 	#fixing the input size -mlreyes
-	input = input.squeeze()
+	#squeeze only the second dimention
+	#[2,1,x,x] to [2,x,x]
+	input = input.squeeze(dim = 1)
 	
 	
 	print(input.shape, "spec2wav input utilities.py")

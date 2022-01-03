@@ -89,12 +89,14 @@ def spec2wav(input, config_s2w):
 	input = F.pad(input, (0,1), "constant", 0)
 	
 	
+	print(input.shape, "spec2wav input presqueeze utilities.py")
 	#fixing the input size -mlreyes
-	input = input.squeeze()
+	#Squeeze only the second dimention
+	input = torch.squeeze(input, dim = 1)
 	
 	
 	print(input.shape, "spec2wav input utilities.py")
-	print(input.transpose(1,2).shape, "spec2wav input utilities.py")
+	print(input.transpose(1,2).shape, "did i chnagespec2wav input utilities.py")
 	
 	wav_len = int((input.shape[-2] - 1)/ fps * samp_rate)
 	wav = AF.griffinlim(input.transpose(1,2), \

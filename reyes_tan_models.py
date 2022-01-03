@@ -6,6 +6,10 @@ from reyes_tan_utilities import *
 
 from src.dataset.urmp.urmp_sample import *
 from src.utils.multiEpochsDataLoader import MultiEpochsDataLoader as DataLoader
+
+from src.inference.inference import merge_batches
+
+import torchaudio
 #reyes_models patterned after https://github.com/anonymous-16/a-unified-model-for-zero-shot-musical-source-separation-transcription-and-synthesis/tree/main/src/models
 
 #Temporary
@@ -220,19 +224,10 @@ if __name__ == "__main__":
 			persistent_workers = False,
 			collate_fn = urmp_data.get_collate_fn())
 	
-	
-	for i_batch, urmp_batch in enumerate(urmp_loader):
-		print("START reyesmodels.py")
-		print(len(urmp_batch))
-		print(urmp_batch[0].size())
-		print(urmp_batch[1].size())
-		print(urmp_batch[2])
-		print("END reyesmodels.py")
-		break
 
 	parameters = {}
-	parameters['enc'] = enc.parameters()
-	parameters['dec'] = dec.parameters()
+	parameters['enc'] = list(enc.parameters())
+	parameters['dec'] = list(dec.parameters())
 	
 	optimizers = []
 	#since resume epoch is 0
@@ -241,16 +236,71 @@ if __name__ == "__main__":
 						lr = 5e-4/(2**(0 // 100)))
 		optimizers.append({'mode' : param, 'opt' : optimizer, 'name' : param})
 	
+	
+	sep_spec = merge_batches(final, duration_axis =-2)
+	print(sep_spec.shape)
+	sep_spec = sep_spec.unsqueeze(dim = 0)
+	print(sep_spec.shape)
+	finalwav = spec2wav(sep_spec, config_s2w)
+	print(finalwav.shape)
+	
+	#wavs are 2d
+	finalwav = finalwav.detach().squeeze(dim = 0)
+	#Their sample rate is 16k apparently
+	torchaudio.save("first.wav", finalwav, 16000)
+	
+	for urmp_batch in urmp_loader:
+		urmp_batch = urmp_batch[0]
+		print(urmp_batch.shape, "size of urmpbatch[0] r_t_models.oy")
+		urmp_batch = urmp_batch[1,:,:]
+		print(urmp_batch.shape, "size after taking only first of abtch r_t_models.py")
+		torchaudio.save("datasampleorig2.wav", urmp_batch, 16000)
+		
+		urmp_batch = urmp_batch.unsqueeze(dim = 0)
+		urmp_batch = wav2spec(config_spec, urmp_batch)
+		print(urmp_batch.shape, "size after wav2spec r_t_models.py")
+		
+		urmp_batch = spec2wav(urmp_batch, config_s2w)
+		print(urmp_batch.shape, "size after spec2wav r_t_models.py")
+		urmp_batch = urmp_batch.detach().squeeze(dim = 0)
+		torchaudio.save("datasample2.wav", urmp_batch, 16000)
+		break
+	'''
 
 	for i_batch, urmp_batch in enumerate(urmp_loader):
-	
+		print(i_batch, "Doing this batch")
+		loss = []
+		
+		out, out_conc = enc(initial)
+		final = dec(out, out_conc)
+		
 		for j in range(len(optimizers)):
-			optimizers[j]['opt'].zero_grad()
-			loss = out[0,0,0,0] #hard code for now.
-			loss.backward(retain_graph = True)
-			optimizers[j]['opt'].step()
-			del loss
-			print("done with one optim")
+			op = optimizers[j]['opt']
+			
+			op.zero_grad()
+			loss.append(torch.abs(out[0,0,0,0])) #hard code for now.
+			loss[j].backward(retain_graph = True)
+			
+		#apparently you can't take a step yet until you process everything
+		for j in range(len(optimizers)):
+			op = optimizers[j]['opt']
+			op.step()
+			op.zero_grad()
+		del loss
+		
+		if i_batch == 10:
 			break
-		break
 	print("reached sample")
+	'''
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
