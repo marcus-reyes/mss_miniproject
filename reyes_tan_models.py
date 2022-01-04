@@ -30,6 +30,11 @@ class Encoder(nn.Module):
 		#Momentum
 		self.momentum = config['momentum']
 		
+		#Conditioning dimension from querynet
+		self.cond_dim = config['cond_dim']
+		
+		#input size. Based on frequency. In this case 256/2 or 128
+		self.input_size = config['input_size']
 		
 		
 		#initialize the blocks
@@ -50,18 +55,30 @@ class Encoder(nn.Module):
 							bias = False))
 			self.bn_layers.append(nn.BatchNorm2d(self.out_channels))
 			
+			self.film_layers.append(FiLM1DLayer(self.cond_dim, \
+							self.out_channels, \
+							self.input_size))
+							
 			self.in_channels = self.out_channels
 			self.out_channels *= 2
+			self.input_size //= 2
 			
-	def forward(self, input):
+	def forward(self, input, condition):
 	
 		#There model seems to be not a strict Unet in that the concatenation only happens once
 		#Update. It is a list which is unpacked decoder side. It is indeed a strcit Unet
 		x = input
 		concat_tensors = []
 		for i in range(self.num_blocks):
+		
+			#normal "layers"
 			x = self.conv_layers[i](x)
 			x = self.bn_layers[i](x)
+			
+			#film layers
+			x = self.film_layers[i](x, condition)
+			
+			#others
 			concat_tensors.append(x)
 			x = F.avg_pool2d(x, kernel_size = (1, 2))
 			
@@ -155,18 +172,149 @@ class Decoder(nn.Module):
 		x = self.bottom(x)
 		return x
 
+class Query(nn.Module):
 
+	def __init__(self, config):
+		super(Query, self).__init__()
+
+		#Unpack config
+		self.num_blocks = config['num_blocks']
+		self.in_channels = config['in_channels']
+		self.input_size = config['input_size']
+		self.output_size = self.input_size
+		self.cond_dim = config['cond_dim']
+		self.out_channels = 2
+		
+		#Layers
+		self.conv_layers = nn.ModuleList()
+		self.bn_layers = nn.ModuleList()
+		
+		for i in range(self.num_blocks):
+			self.conv_layers.append(nn.Conv2d(\
+				in_channels = self.in_channels, \
+				out_channels = self.out_channels, \
+				kernel_size = (3,3), \
+				stride = (1,1), \
+				padding = (1,1), \
+				bias = False\
+				))
+				
+			self.bn_layers.append(nn.BatchNorm2d(\
+				self.out_channels\
+				))
+			
+			self.in_channels = self.out_channels
+			self.out_channels *= 2
+			self.output_size //= 2
+		
+		self.bottom = nn.Conv1d(\
+			in_channels = self.in_channels * self.output_size, \
+			out_channels = self.cond_dim, \
+			kernel_size = 1\
+			)
+
+	def forward(self, input):
+		x = input
+		
+		for i in range(self.num_blocks):
+			x = self.conv_layers[i](x)
+			x = self.bn_layers[i](x)
+			
+			#insert relu_
+			x = F.avg_pool2d(x, kernel_size = (2,2))
+			
+		x = x.transpose(-1, -2).flatten(1,2)
+		x = self.bottom(x)
+		x = torch.tanh(x)
+		
+		#query mode in their code reduces dimension
+		
+		x = x.mean(-1)
+		return x
+#Taken almost as is from source code since this is a building block that is based on another paper. LinearBlock1d was changed to nn.Conv1d as part of the rebuilding/unwrapping of all the multiple layers of networks that they have.
+class FiLM1DLayer(nn.Module):
+	"""A 1D FiLM Layer. Conditioning a 1D tensor on a 3D tensor using the FiLM.
+		Input : [B x input_dim], [B x channels_dim x T x feature_size]
+		Output : [B x channels_dim x T x feature_size]
+	
+		Parameters
+		-----------
+		input_dim : int
+			The number of channels of the input 1D tensor.
+		channels_dim : int
+			The number of channels of the input 3D tensor.
+		feature_size : int
+			The feature size of the input 3D tensor.
+	
+		Properties
+		----------
+		channels_dim : int
+			See in Parameters.
+		feature_size :
+			See in Parameters.
+		gamma : `LinearBlock1D`
+			gamma in FiLM..
+		beta : `LinearBlock1D`
+			beta in FiLM
+		
+	"""
+
+	def __init__(self, input_dim, channels_dim, feature_size):
+		super(FiLM1DLayer, self).__init__()
+
+		#linear block 1d is just conv1d
+		self.gamma = nn.Conv1d(in_channels = input_dim, \
+					out_channels = channels_dim * feature_size, \
+					kernel_size = 1)
+		self.beta = nn.Conv1d(in_channels = input_dim, \
+					out_channels = channels_dim * feature_size, \
+					kernel_size = 1)
+
+		self.channels_dim = channels_dim
+		self.feature_size = feature_size
+
+	def forward(self, input, condition):
+		"""
+		Parameters
+		----------
+		input : tensor
+			The input 3D tensor.
+			[B x channels_dim x T x feature_size]
+		condition:	tensor
+			The input 1D (condition) tensor.
+			[B x input_dim]
+		Returns
+		-------
+				:	tensor
+			[B x channels_dim x T x feature_size]		
+		"""	
+		x = input
+		y = condition
+		channels_dim = self.channels_dim
+		feature_size = self.feature_size
+		g = self.gamma(y).reshape((y.shape[0], channels_dim, feature_size, -1)).transpose(-1, -2)
+		b = self.beta(y).reshape((y.shape[0], channels_dim, feature_size, -1)).transpose(-1, -2)
+		return x * g + b
 
 if __name__ == "__main__":
 	
 	config_enc = {'num_blocks' : 1, \
 				'in_channels' : 1, \
-				'momentum' : 0.01}
+				'momentum' : 0.01, \
+				'cond_dim' : 6, \
+				'input_size' : 128, \
+				}
 				
 	config_dec = {'num_blocks' : 1, \
 				'in_channels' : 4, \
 				'momentum' : 0.01}
-	
+				
+
+	config_query = {'num_blocks' : 2, \
+		'in_channels' : 1, \
+		'input_size' : 128, \
+		'cond_dim' : 6, \
+		}
 	#n_fft is the same as win_length
 	config_spec = {'center' : True, \
 				'freeze_parameters' : True, \
@@ -192,18 +340,25 @@ if __name__ == "__main__":
 				'rand_init' : False}
 
 	urmpsamp = torch.randn((2, 1, 48000))
+	urmpspec = torch.randn((2,1,301,128))
 	newinitial = wav2spec(config_spec, urmpsamp)
 	
 	print(urmpsamp.shape, newinitial.shape, "urmpsamp, newitinital shapes reyesmodels.py")
 	
-	enc = Encoder(config_enc)
-	dec = Decoder(config_dec)
+	enc_net = Encoder(config_enc)
+	dec_net = Decoder(config_dec)
+	query_net = Query(config_query)
 	
+	queryout = query_net(urmpspec)
+	queryout = queryout.unsqueeze(dim = 2)
+	
+	print(queryout.shape, "query shape main rt_models.py")
 	initial = torch.randn((2,1,301,128))
-	out, out_conc = enc(initial)
+	initial_cond = torch.randn((2,6,1))
+	out, out_conc = enc_net(initial, initial_cond)
 		
 	
-	final = dec(out, out_conc)
+	final = dec_net(out, out_conc)
 	
 	print(final.size(), "final size")
 	
@@ -226,8 +381,9 @@ if __name__ == "__main__":
 	
 
 	parameters = {}
-	parameters['enc'] = list(enc.parameters())
-	parameters['dec'] = list(dec.parameters())
+	parameters['query'] = list(query_net.parameters())
+	parameters['enc'] = list(enc_net.parameters())
+	parameters['dec'] = list(dec_net.parameters())
 	
 	optimizers = []
 	#since resume epoch is 0
@@ -250,6 +406,52 @@ if __name__ == "__main__":
 	torchaudio.save("first.wav", finalwav, 16000)
 	
 	for urmp_batch in urmp_loader:
+	
+		#splitting the data taken as is since this is just processing
+		mix, another_mix, batch = urmp_batch
+		separated, query, another_query, pitch_target, another_pitch_target = batch
+		
+		for j in range(len(optimizers)):
+			mode = optimizers[j]['mode']
+			op = optimizers[j]['mode']
+			
+			#query: obtain the loss similar to how they did it.
+			latent_vectors = []
+			hQuery = []
+			if mode == "query":
+				print(query.shape, "testing out query shape")
+				for i in range(query.shape[1]):
+					query_spec = wav2spec(config_spec, query[:,i])
+					a_query_spec = wav2spec(config_spec, another_query[:,i])
+					
+					h = query_net(query_spec)
+					hc = query_net(a_query_spec)
+					
+					latent_vectors.append([h, hc])
+					
+					print(h.size(), hc.size(), "h hc size from training loop")
+				
+				sim = 0.
+				for i in range(query.shape[1]):
+					next_i = (i + 1) % query.shape[1]
+					sim += torch.mean((latent_vectors[i][0] - latent_vectors[i][1])**2, dim = -1) + \
+						torch.relu(1./8. - torch.mean((latent_vectors[i][0] - latent_vectors[next_i][1])**2, dim = -1))
+						
+				sim_loss = sim.mean()/query.shape[1]
+				print(sim_loss)
+			#enc
+			
+			#dec
+			else: 
+				
+		
+		
+		
+		
+		
+		
+		
+		'''
 		urmp_batch = urmp_batch[0]
 		print(urmp_batch.shape, "size of urmpbatch[0] r_t_models.oy")
 		urmp_batch = urmp_batch[1,:,:]
@@ -264,6 +466,8 @@ if __name__ == "__main__":
 		print(urmp_batch.shape, "size after spec2wav r_t_models.py")
 		urmp_batch = urmp_batch.detach().squeeze(dim = 0)
 		torchaudio.save("datasample2.wav", urmp_batch, 16000)
+		'''
+		
 		break
 	'''
 
