@@ -18,7 +18,10 @@ class UrmpTest(object):
 			instruments = fs[0].split(',')
 			files = fs[1].split(',')
 			query = qs[1].split(',')
+			
 			sample_name = str.replace(files[0].split('_')[-1], '.h5' ,'')
+			#need ._TEST.h5 instead of just .h5. didn't work
+			#sample_name = str.replace(files[0].split('_')[-1], '._TEST.h5' ,'')
 			sample = {}
 			for j, instr in enumerate(instruments):
 				sample[instr] = {}
@@ -32,7 +35,7 @@ class UrmpTest(object):
 
 
 	def vad(self, x, frame_roll, frames_per_second=100, sample_rate=16000, notes_num=88):
-
+ 
 		frames_per_sample = frames_per_second * 1. / sample_rate
 
 		if len(x.shape) == 2:
@@ -77,6 +80,11 @@ class UrmpTest(object):
 				query = []
 				tr_query = []
 				for q in queries:
+				
+					#add to change since they swapped conventison
+					print(q, "q in urmp_test.py")
+					q = q.replace(".h5", "._TEST.h5")
+					print(q, "q post replacein urmp_test.py")
 					with h5py.File(q, 'r') as hf:
 						waveform = int16_to_float32(hf['waveform'][:])[None, :]
 						frame_roll = hf['frame_roll'][:].astype(np.int)
@@ -84,7 +92,9 @@ class UrmpTest(object):
 					waveform, frame_roll = self.vad(waveform, frame_roll)
 					query.append(waveform)
 					tr_query.append(parse_frameroll2annotation(frame_roll))
-
+				
+				#add to change since they swapped conventison
+				ref = ref.replace(".h5", "._TEST.h5")
 				with h5py.File(ref, 'r') as hf:
 					wav_ref = int16_to_float32(hf['waveform'][:])[None, :]
 					tr_ref = hf['note_annotations_txt'][0].decode()

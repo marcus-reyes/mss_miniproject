@@ -48,6 +48,9 @@ class Encoder(nn.Module):
 		self.bn_layers = nn.ModuleList()
 		self.film_layers = nn.ModuleList()
 		
+		#for transcriptor later
+		self.latent_rep_channels = []
+		
 		#Source code has an extra one
 		for i in range(self.num_blocks + 1):
 			self.conv_layers.append(nn.Conv2d(in_channels = self.in_channels, \
@@ -62,6 +65,8 @@ class Encoder(nn.Module):
 							self.out_channels, \
 							self.input_size))
 							
+			self.latent_rep_channels.append([self.out_channels, self.input_size])
+			
 			self.in_channels = self.out_channels
 			self.out_channels *= 2
 			self.input_size //= 2
@@ -251,6 +256,159 @@ class Query(nn.Module):
 		x = x.mean(-1)
 		x = x.unsqueeze(dim = 2)
 		return x
+		
+		
+
+class Transcriptor(nn.Module):
+
+	def __init__(self, config):
+		super(Transcriptor, self).__init__()
+		
+		self.num_blocks = config['num_blocks']
+		self.output_dim = config['output_dim']
+		self.in_channels = config['in_channels']
+		self.input_size = config['input_size']
+		self.out_channels = self.in_channels * 2
+		self.momentum = config['momentum']
+		
+		self.conv_layers = nn.ModuleList()
+		self.bn_layers = nn.ModuleList()
+		self.conv_layers_2 = nn.ModuleList()
+		self.bn_layers_2 = nn.ModuleList()
+		
+		
+		
+		for i in range(self.num_blocks):
+			self.conv_layers.append(nn.Conv2d(\
+							in_channels = self.in_channels, \
+							out_channels = self.out_channels, \
+							kernel_size = (3,3), \
+							stride = (1,1), \
+							padding = (1,1), \
+							bias = False))
+			self.bn_layers.append(nn.BatchNorm2d(\
+							self.out_channels, \
+							momentum = self.momentum))
+			
+			self.conv_layers_2.append(nn.Conv2d(\
+							in_channels = self.out_channels, \
+							out_channels = self.out_channels, \
+							kernel_size = (3,3), \
+							stride = (1,1), \
+							padding = (1,1), \
+							bias = False))
+			self.bn_layers_2.append(nn.BatchNorm2d(\
+							self.out_channels, \
+							momentum = self.momentum))
+							
+							
+			self.in_channels = self.out_channels
+			self.out_channels *= 2
+			self.input_size //= 2
+		self.bottom = nn.Conv1d(\
+			in_channels = self.in_channels * self.input_size, \
+			out_channels = self.output_dim, \
+			kernel_size = 1, \
+			stride = 1, \
+			bias = True)
+			
+		self.notes_num = self.output_dim
+			
+	def forward(self, input):
+	
+		x = input
+		
+		for j in range(self.num_blocks):
+			x = self.conv_layers[j](x)
+			x = self.bn_layers[j](x)
+			x = F.relu_(x)
+			x = self.conv_layers_2[j](x)
+			x = self.bn_layers_2[j](x)
+			x = F.relu_(x)
+			x = F.avg_pool2d(x, kernel_size = (1,2))
+			
+		x = x.transpose(-1, -2).flatten(1, 2)
+		x = self.bottom(x)
+		
+		return x
+		
+#simple enough not to need a config
+
+class Pitch(nn.Module):
+
+	def __init__(self, notes_num, latent_rep_channels):
+	
+		super(Pitch, self).__init__()
+		self.notes_num = notes_num
+		self.latent_rep_channels = latent_rep_channels
+		self.layers = nn.ModuleList()
+		for latent_rep in latent_rep_channels:
+			D = latent_rep[0] * latent_rep[1]
+			K = 2 * D
+			
+			self.layers.append(nn.Conv1d(\
+						in_channels = self.notes_num, \
+						out_channels = K, \
+						kernel_size = 1, \
+						stride = 1, \
+						bias = False))
+	
+	def forward(self, input):
+		output_tensors = []
+		x = input
+		print(x.size(), "x size insidepitch")
+		
+		for i, layer in enumerate(self.layers):
+		
+			#the shape changes therefore maintain input's originality
+			x = self.layers[i](input)
+			x = x.reshape((x.shape[0], \
+						self.latent_rep_channels[i][0] * 2, \
+						self.latent_rep_channels[i][1], \
+						x.shape[-1])).transpose(-1, -2)
+			output_tensors.append(x)
+			
+		return output_tensors
+	
+#again doesn't really need config
+class Timbre(nn.Module):
+	
+	def __init__(self, latent_rep_channels, momentum):
+		super(Timbre, self).__init__()
+		
+		self.conv_layers = nn.ModuleList()
+		self.bn_layers = nn.ModuleList()
+		
+		output_dim = 0
+		for latent_rep in latent_rep_channels:
+			channels = latent_rep[0]
+			output_dim += (latent_rep[0] * latent_rep[1])
+			
+			self.conv_layers.append(nn.Conv2d(\
+						in_channels = channels, \
+						out_channels = channels, \
+						kernel_size = (3,3), \
+						stride = (1,1), \
+						padding = (1,1), \
+						bias = False))
+						
+			self.bn_layers.append(nn.BatchNorm2d(\
+						channels, \
+						momentum = momentum))
+			
+		self.output_dim = output_dim
+		
+	def forward(self, input):
+		output_tensors = []
+		x = input
+		
+		for j in range(len(self.conv_layers)):
+			x = self.conv_layers[j](input[j])
+			x = self.bn_layers[j](x)
+			x = F.relu_(x)
+			output_tensors.append(x)
+			
+		return output_tensors
 #Taken almost as is from source code since this is a building block that is based on another paper. LinearBlock1d was changed to nn.Conv1d as part of the rebuilding/unwrapping of all the multiple layers of networks that they have.
 class FiLM1DLayer(nn.Module):
 	"""A 1D FiLM Layer. Conditioning a 1D tensor on a 3D tensor using the FiLM.
@@ -319,6 +477,57 @@ class FiLM1DLayer(nn.Module):
 #taken as is since this is just data manipulation
 def align(a, b, dim):
 	return a.transpose(0, dim)[:b.shape[dim]].transpose(0, dim)
+	
+#entangle and multipleentanglement were taken as is since there wasn't much unwrapping to be done
+def entangle(p, ti):
+	"""
+		Entanglement operation discribed in Section 3.3 in the paper.
+		[p_gamma p_beta] = p
+		z = p_gamma * ti + p_beta
+		Note that D = C * F and K = 2 * C * F
+		Parameters
+		----------
+		p : tensor
+			[B x (2*C) x T x F]
+			the disentangled pitch representation
+		ti : tensor
+			[B x C x T x F]
+			the disentangled timbre representation
+		Returns
+		---------
+			: tensor
+			[B x C x T x F]
+	"""
+	p_gamma = p[:, :ti.shape[1]]
+	p_beta = p[:, ti.shape[1]:]
+	return p_gamma * ti + p_beta
+
+#onehot also taken as is
+def onehot(x, dim, classes_num):
+	x = x.unsqueeze(dim)
+	shape = list(x.shape)
+	shape[dim] = classes_num
+	y = torch.zeros(shape).to(x.device).scatter_(dim, x, 1)
+	return y
+def multipleEntanglement(p_tensors, ti_tensors):
+	"""
+		Entanglement operation for a list of pitch and timbre representations. See more details in func `entangle`.
+		Parameters
+		----------
+		p_tensors : list of tensor
+			A list of N pitch representations, the shape of each tensor in which is [B x (2*C) x T x F]
+		ti_tensors : list of tensor
+			A list of N timbre representations, the shape of each tensor in which is [B x C x T x F]
+		Returns
+		---------
+			: list of tensor
+			A list of N tensors, the shape of each tensor in which is [B x C x T x F]
+	"""
+
+	tensors = []
+	for i, p in enumerate(p_tensors):
+		tensors.append(entangle(p, ti_tensors[i]))
+	return tensors
 if __name__ == "__main__":
 	
 	config_enc = {'num_blocks' : 1, \
@@ -370,6 +579,18 @@ if __name__ == "__main__":
 	
 	enc_net = Encoder(config_enc)
 	dec_net = Decoder(config_dec)
+			
+	config_tra = {'num_blocks' : 2, \
+					'output_dim' : 89, \
+					'in_channels' : enc_net.latent_rep_channels[-1][0], \
+					'input_size' : enc_net.latent_rep_channels[-1][1], \
+					'momentum' : 0.01\
+					}
+					
+	tra_net = Transcriptor(config_tra)
+	
+	pitch_net = Pitch(tra_net.notes_num, enc_net.latent_rep_channels)
+	tim_net = Timbre(enc_net.latent_rep_channels, 0.01)
 	query_net = Query(config_query)
 	
 	queryout = query_net(urmpspec)
@@ -380,7 +601,7 @@ if __name__ == "__main__":
 	initial_cond = torch.randn((2,6,1))
 	out, out_conc = enc_net(initial, initial_cond)
 		
-	
+	print(out.shape, "out of enc shape")
 	final = dec_net(out, out_conc)
 	
 	print(final.size(), "final size")
@@ -389,6 +610,23 @@ if __name__ == "__main__":
 	print(finalwav.size(), "final wav size reyesmodels.py")
 	
 	
+	tra_out = tra_net(out)
+	print(tra_out.size(), "tra_out size")
+	pitch_out = pitch_net(tra_out)
+	print(len(pitch_out))
+	print(pitch_out[0].size(), "pitch_out_size")
+	
+	tim_out = tim_net(out_conc + [out])
+	print(len(tim_out), "tim out len")
+	print(tim_out[0].shape, "tim out shape")
+	
+	in_to_dec = multipleEntanglement(pitch_out, tim_out)
+	in_short_dec = in_to_dec[-1]
+	in_to_dec = in_to_dec[:-1]
+	
+	sep = dec_net(in_short_dec, in_to_dec)
+	print(sep.shape)
+	#exit()
 	### Data loading taken from their code
 
 	urmp_data = UrmpSample('utilities_taken_as_is/urmp.cfg', 'train')
@@ -407,6 +645,9 @@ if __name__ == "__main__":
 	parameters['query'] = list(query_net.parameters())
 	parameters['enc'] = list(enc_net.parameters())
 	parameters['dec'] = list(dec_net.parameters())
+	parameters['tim'] = list(tim_net.parameters())
+	parameters['tra'] = list(tra_net.parameters())
+	parameters['pitch'] = list(pitch_net.parameters())
 	
 	optimizers = []
 	#since resume epoch is 0
@@ -433,7 +674,7 @@ if __name__ == "__main__":
 	
 	file1 = open("losses1.txt", 'w')
 	file2 = open("losses2.txt", 'w')
-	for epoch in range(3):
+	for epoch in range(1):
 		for i_batch, urmp_batch in enumerate(urmp_loader):
 		
 			#splitting the data taken as is since this is just processing
@@ -471,30 +712,52 @@ if __name__ == "__main__":
 					sim_loss = sim.mean()/query.shape[1]
 					print(sim_loss)
 				
-				#enc and dec
-				else: 
+				#enc and dec tra tim pitch just choose one
+				elif mode == "enc": 
 					spec_losses = []
 					mix_spec = wav2spec(config_spec, mix)
+					another_mix_spec = wav2spec(config_spec, another_mix)
+					target = onehot(pitch_target, 1, 89)
+					another_target = onehot(another_pitch_target, 1, 89)
 					
+					pitch_transcription = []
+					another_pitch_transcription = []
 					for i in range(separated.shape[1]):
+						source_spec = wav2spec(config_spec, separated[:,i])
+						
 						query_spec = wav2spec(config_spec, query[:,i])
 						hQuery = query_net(query_spec)
 						
-						#mss_input = (mix_spec, hQuery)
-						
-						
 						out, out_conc = enc_net(mix_spec, hQuery)
-							
-
-						est_spec = dec_net(out, out_conc)
+						tra_out = tra_net(out)
+						tra_out_2 = F.softmax(tra_out, 1)
 						
-						source_spec = wav2spec(config_spec, separated[:,i])
+						out_2, out_conc_2 = enc_net(another_mix_spec, hQuery)
 						
-						spec_loss = torch.abs(est_spec - align(source_spec, est_spec, -2))
+						pitch_out = pitch_net(tra_out_2)
+						tim_out = tim_net(out_conc_2 + [out_2])
 						
+						in_to_dec = multipleEntanglement(pitch_out, tim_out)
+						
+						in_short_dec = in_to_dec[-1]
+						in_to_dec = in_to_dec[:-1]
+						
+						sep = dec_net(in_short_dec, in_to_dec)
+						
+						#need sep and tra_out for loss
+						
+						pitch_transcription.append(tra_out)
+						spec_loss = torch.abs(sep - align(source_spec, sep, -2))
 						spec_losses.append(spec_loss)
+						
 					spec_loss = torch.stack(spec_losses, 1)
 					spec_loss = spec_loss.mean()
+					
+					transcription = torch.stack(pitch_transcription, 2)
+					pitch_loss = nn.CrossEntropyLoss()(transcription, align(pitch_target, transcription, -1))
+					
+					print(spec_loss, pitch_loss, "spec and pitch loss msi-dis")
+
 					'''
 					spec_loss.backward(retain_graph = True)
 					op.step()
@@ -504,7 +767,8 @@ if __name__ == "__main__":
 					'''
 
 			#step needs to be all at once for the enc aand dec
-			spec_loss.backward(retain_graph = True)
+			others_loss = spec_loss + pitch_loss
+			others_loss.backward(retain_graph = True)
 			sim_loss.backward(retain_graph = True)
 			for j in range(len(optimizers)):
 				
@@ -521,7 +785,7 @@ if __name__ == "__main__":
 					loss_list_2.append(spec_loss)
 					op.zero_grad()
 					
-			file1.write(str(spec_loss))
+			file1.write(str(others_loss))
 			file1.write("\n")
 			file2.write(str(sim_loss))
 			file2.write("\n")
@@ -530,16 +794,31 @@ if __name__ == "__main__":
 			
 			file1 = open("losses1.txt", 'a')
 			file2 = open("losses2.txt", 'a')
-			del spec_loss
+			del others_loss
 			del sim_loss
+
 			print("===========================================Done with ",i_batch,"================")
 	
-			if i_batch == 3:
+			if i_batch == 1:
 				file1.close()
 				file2.close()
 				break
 		
 		
+		nets_list_to_save = [enc_net, dec_net, query_net, tra_net, tim_net, pitch_net]
+		nets_names_list = ['enc', 'dec', 'query', 'tra', 'tim', 'pitch']
+		
+			
+		torch.save({\
+				'epoch': epoch, \
+				'enc_state_dict': enc_net.state_dict(), \
+				'dec_state_dict': dec_net.state_dict(), \
+				'query_state_dict': query_net.state_dict(), \
+				'tra_state_dict' : tra_net.state_dict(), \
+				'tim_state_dict' : tim_net.state_dict(), \
+				'pitch_state_dict' : pitch_net.state_dict(), \
+				'optimizers': optimizers},\
+				"checkpoint_" + str(epoch) + ".pt")
 		
 		
 		'''
