@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-from utilities.eyes_tan_utilities import *
+from utilities.reyes_tan_utilities import *
 
 from src.dataset.urmp.urmp_sample import *
 from src.utils.multiEpochsDataLoader import MultiEpochsDataLoader as DataLoader
