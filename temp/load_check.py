@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import torch.nn.functional as F
 
-from reyes_tan_utilities import *
+from utilities.reyes_tan_utilities import *
 
 from src.dataset.urmp.urmp_sample import *
 from src.utils.multiEpochsDataLoader import MultiEpochsDataLoader as DataLoader
@@ -89,7 +89,7 @@ if __name__ == "__main__":
 	
 	
 	##Do a runthrough
-	urmp_data = UrmpSample('utilities_taken_as_is/urmp.cfg', 'train')
+	urmp_data = UrmpSample('utilities/urmp.cfg', 'train')
 
 	
 	urmp_loader = DataLoader(urmp_data, \

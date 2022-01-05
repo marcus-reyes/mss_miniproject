@@ -105,7 +105,7 @@ def spec2wav(input, config_s2w):
 				hop_length = hop_length, \
 				win_length = win_length, \
 				power = power, \
-				#normalized = False, \???? unexpected keyword.
+				normalized = False, \
 				length = wav_len, \
 				n_iter = n_iter, \
 				momentum = momentum, \
