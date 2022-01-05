@@ -1,5 +1,5 @@
 [raw_data]
-dataset_dir = data/urmp
+dataset_dir = D:\Downloads\URMP\Dataset\reproduce_data\urmp
 train_hdf5s_dir = hdf5s/urmp/train
 test_hdf5s_dir = hdf5s/urmp/test
 sample_rate = 1600
@@ -13,7 +13,7 @@ train_batch_size = 2
 samples_num = 6240
 
 [Violin]
-train_lst = data/urmp/Violin/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Violin\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -25,7 +25,7 @@ classes_num = 88
 monody = True
 
 [Flute]
-train_lst = data/urmp/Flute/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Flute\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -37,7 +37,7 @@ classes_num = 88
 monody = True
 
 [Cello]
-train_lst = data/urmp/Cello/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Cello\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -49,7 +49,7 @@ classes_num = 88
 monody = True
 
 [Viola]
-train_lst = data/urmp/Viola/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Viola\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -61,7 +61,7 @@ classes_num = 88
 monody = True
 
 [Saxophone]
-train_lst = data/urmp/Saxophone/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Saxophone\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -73,7 +73,7 @@ classes_num = 88
 monody = True
 
 [Trombone]
-train_lst = data/urmp/Trombone/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Trombone\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -85,7 +85,7 @@ classes_num = 88
 monody = True
 
 [Oboe]
-train_lst = data/urmp/Oboe/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Oboe\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -97,7 +97,7 @@ classes_num = 88
 monody = True
 
 [Trumpet]
-train_lst = data/urmp/Trumpet/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Trumpet\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -109,7 +109,7 @@ classes_num = 88
 monody = True
 
 [Clarinet]
-train_lst = data/urmp/Clarinet/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Clarinet\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -121,7 +121,7 @@ classes_num = 88
 monody = True
 
 [Tuba]
-train_lst = data/urmp/Tuba/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Tuba\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -133,7 +133,7 @@ classes_num = 88
 monody = True
 
 [Horn]
-train_lst = data/urmp/Horn/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Horn\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -145,7 +145,7 @@ classes_num = 88
 monody = True
 
 [Bassoon]
-train_lst = data/urmp/Bassoon/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Bassoon\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3
@@ -157,7 +157,7 @@ classes_num = 88
 monody = True
 
 [Double_Bass]
-train_lst = data/urmp/Double_Bass/train.lst
+train_lst = D:\Downloads\URMP\Dataset\reproduce_data\urmp\Double_Bass\train.lst
 sample_rate = 16000
 train_duration = 3
 vali_duration = 3

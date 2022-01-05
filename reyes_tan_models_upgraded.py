@@ -1,11 +1,13 @@
 import torch.nn as nn
 import torch
 import torch.nn.functional as F
+import argparse
 
 from utilities.reyes_tan_utilities import *
 
 from src.dataset.urmp.urmp_sample import *
 from src.utils.multiEpochsDataLoader import MultiEpochsDataLoader as DataLoader
+from src.utils.utilities import mkdir
 
 from src.inference.inference import merge_batches
 
@@ -530,6 +532,13 @@ def multipleEntanglement(p_tensors, ti_tensors):
 	return tensors
 if __name__ == "__main__":
 	
+	parser = argparse.ArgumentParser(description='')
+	parser.add_argument('--train_dir', type=str, required=True, help='Output of this program')
+
+	
+	args = parser.parse_args()
+	mkdir(args.train_dir)
+
 	config_enc = {'num_blocks' : 1, \
 				'in_channels' : 1, \
 				'momentum' : 0.01, \
@@ -667,13 +676,13 @@ if __name__ == "__main__":
 	#wavs are 2d
 	finalwav = finalwav.detach().squeeze(dim = 0)
 	#Their sample rate is 16k apparently
-	torchaudio.save("first.wav", finalwav, 16000)
+	torchaudio.save(str(args.train_dir)+"/first.wav", finalwav, 16000)
 	loss_list_1 = []
 	loss_list_2 = []
 	print(len(urmp_loader) -1, "length of urmp loader")
 	
-	file1 = open("losses1.txt", 'w')
-	file2 = open("losses2.txt", 'w')
+	file1 = open(str(args.train_dir)+"/losses1.txt", 'w')
+	file2 = open(str(args.train_dir)+"/losses2.txt", 'w')
 	for epoch in range(1):
 		for i_batch, urmp_batch in enumerate(urmp_loader):
 		
@@ -792,8 +801,8 @@ if __name__ == "__main__":
 			file1.close()
 			file2.close()
 			
-			file1 = open("losses1.txt", 'a')
-			file2 = open("losses2.txt", 'a')
+			file1 = open(str(args.train_dir)+"/losses1.txt", 'a')
+			file2 = open(str(args.train_dir)+"/losses2.txt", 'a')
 			del others_loss
 			del sim_loss
 
@@ -818,7 +827,7 @@ if __name__ == "__main__":
 				'tim_state_dict' : tim_net.state_dict(), \
 				'pitch_state_dict' : pitch_net.state_dict(), \
 				'optimizers': optimizers},\
-				"checkpoint_" + str(epoch) + ".pt")
+				str(args.train_dir)+"/checkpoint_" + str(epoch) + ".pt")
 		
 		
 		'''

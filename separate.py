@@ -4,7 +4,18 @@ from src.utils.multiEpochsDataLoader import MultiEpochsDataLoader as DataLoader
 
 import torchaudio
 import torch
-testdata = load_test_data(r"D:\Downloads\URMP\Dataset\reproduce_data\urmp")
+import argparse
+
+from src.utils.utilities import mkdir
+
+parser = argparse.ArgumentParser(description='')
+parser.add_argument('--eval_dir', type=str, required=True, help='Output of this program')
+
+	
+args = parser.parse_args()
+mkdir(args.eval_dir)
+
+testdata = load_test_data(r"data/urmp/")
 
 print(testdata.test_samples())
 		
@@ -22,7 +33,7 @@ for item in testdata.test_samples():
 	#numtowav = item['mix'].astype('float16')
 	numtowav = torch.from_numpy(item['mix'])
 	print(type(numtowav))
-	torchaudio.save("testsample1.wav", numtowav[0,:,:], 16000)
-	torchaudio.save("testsample2.wav", numtowav[1,:,:], 16000)
+	torchaudio.save(str(args.eval_dir)+"/testsample1.wav", numtowav[0,:,:], 16000)
+	torchaudio.save(str(args.eval_dir)+"/testsample2.wav", numtowav[1,:,:], 16000)
 	break
 #print(len(testdata))

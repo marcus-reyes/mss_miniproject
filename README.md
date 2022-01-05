@@ -25,11 +25,11 @@ python3 src/dataset/urmp/urmp_generate_dataset.py --data=data/urmp --feature=dat
 ### 3. Train the Network
 Run the following command to train the network. 
 ```
-python3 reyes_tan_models_upgraded.py
+python3 reyes_tan_models_upgraded.py --train_dir=train_results
 ```
 
 ### 4. Evaluate the Network
 Run the following command to evaluate the network and produce the corresponding seperated music file.
 ```
-python3 separated.py
+python3 separate.py --eval_dir=eval_results
 ```
