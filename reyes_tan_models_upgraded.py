@@ -88,10 +88,10 @@ class Encoder(nn.Module):
 			x = F.relu_(x)
 			
 			#film layers
-			print(x.shape, "pre film for concat testing")
+			#print(x.shape, "pre film for concat testing")
 			x = self.film_layers[i](x, condition)
 			
-			print(x.shape, "post film for concat testing")
+			#print(x.shape, "post film for concat testing")
 			#others
 			concat_tensors.append(x)
 			x = F.avg_pool2d(x, kernel_size = (1, 2))
@@ -173,7 +173,7 @@ class Decoder(nn.Module):
 		x = input
 		for i in range(self.num_blocks):
 		
-			print(x.size())
+			#print(x.size())
 			x = self.conv_tr_layers[i](x)
 			x = self.bn_layers[i](x)
 			x = F.relu_(x)
@@ -182,18 +182,18 @@ class Decoder(nn.Module):
 			#Pruning to match
 			x = x[:, :, 1:-1, : -1]
 			
-			print(x.size(), "x size per dec before the torchcat")
-			print(concat_tensors[-i-1].size(), "x size per dec before the torchcat")
+			#print(x.size(), "x size per dec before the torchcat")
+			#print(concat_tensors[-i-1].size(), "x size per dec before the torchcat")
 			#print(concat_tensors[-i-1].size())
 			#Since they the unpacking is FIFO use -i-1
 			x = torch.cat((x, concat_tensors[-i-1]), dim = 1)
 			
 			x = self.conv_layers[i](x)
-			print(x.size(), "x per dec cycle post conv")
+			#print(x.size(), "x per dec cycle post conv")
 			x = self.bn_layers_2[i](x)
-			print(x.size(), "x per dec cycle post bn")
+			#print(x.size(), "x per dec cycle post bn")
 			x = F.relu_(x)
-			print(x.size(), "x per dec cycle")
+			#print(x.size(), "x per dec cycle")
 			
 		x = self.bottom(x)
 		return x
@@ -358,7 +358,7 @@ class Pitch(nn.Module):
 	def forward(self, input):
 		output_tensors = []
 		x = input
-		print(x.size(), "x size insidepitch")
+		#print(x.size(), "x size insidepitch")
 		
 		for i, layer in enumerate(self.layers):
 		
@@ -530,6 +530,17 @@ def multipleEntanglement(p_tensors, ti_tensors):
 	for i, p in enumerate(p_tensors):
 		tensors.append(entangle(p, ti_tensors[i]))
 	return tensors
+
+#also taken as is
+def move_data2cuda(urmp_batch):
+	mix, another_mix, batch = urmp_batch
+	separated, query, another_query, pitch_target, another_pitch_target = batch
+	batch = [separated, query, another_query, pitch_target, another_pitch_target]
+	for i, b in enumerate(batch):
+		batch[i] = b.cuda()
+	mix = mix.cuda()
+	another_mix = another_mix.cuda()
+	return mix, another_mix, batch	
 if __name__ == "__main__":
 	
 	parser = argparse.ArgumentParser(description='')
@@ -539,31 +550,31 @@ if __name__ == "__main__":
 	args = parser.parse_args()
 	mkdir(args.train_dir)
 
-	config_enc = {'num_blocks' : 1, \
+	config_enc = {'num_blocks' : 3, \
 				'in_channels' : 1, \
 				'momentum' : 0.01, \
 				'cond_dim' : 6, \
-				'input_size' : 128, \
+				'input_size' : 256, \
 				}
 				
-	config_dec = {'num_blocks' : 1, \
-				'in_channels' : 4, \
+	config_dec = {'num_blocks' : 3, \
+				'in_channels' : 16, \
 				'momentum' : 0.01}
 				
 
 	config_query = {'num_blocks' : 2, \
 		'in_channels' : 1, \
-		'input_size' : 128, \
+		'input_size' : 256, \
 		'cond_dim' : 6, \
 		}
 	#n_fft is the same as win_length
 	config_spec = {'center' : True, \
 				'freeze_parameters' : True, \
-				'n_fft' : 256, \
+				'n_fft' : 512, \
 				'hop_length' : 160, \
 				'pad_mode' : "reflect", \
 				'window' : "hann", \
-				'win_length' : 256}
+				'win_length' : 512}
 				
 				
 	# should be 256 not 128
@@ -571,9 +582,9 @@ if __name__ == "__main__":
 	config_s2w = {'fps' : 100, \
 				'samp_rate' : 16000, \
 				'window' : "hann", \
-				'n_fft' : 256, \
+				'n_fft' : 512, \
 				'hop_length' : 160, \
-				'win_length' : 256, \
+				'win_length' : 512, \
 				'power' : 1, \
 				'normalized' : False, \
 				'n_iter' : 200, \
@@ -581,12 +592,16 @@ if __name__ == "__main__":
 				'rand_init' : False}
 
 	urmpsamp = torch.randn((2, 1, 48000))
-	urmpspec = torch.randn((2,1,301,128))
+	urmpspec = torch.randn((2,1,301,256))
 	newinitial = wav2spec(config_spec, urmpsamp)
 	
 	print(urmpsamp.shape, newinitial.shape, "urmpsamp, newitinital shapes reyesmodels.py")
 	
 	enc_net = Encoder(config_enc)
+	initial = torch.randn((2,1,301,256))
+	initial_cond = torch.randn((2,6,1))
+	out, out_conc = enc_net(initial, initial_cond)
+	print(out.shape, "out of enc shape")
 	dec_net = Decoder(config_dec)
 			
 	config_tra = {'num_blocks' : 2, \
@@ -606,7 +621,7 @@ if __name__ == "__main__":
 	#queryout = queryout.unsqueeze(dim = 2)
 	
 	print(queryout.shape, "query shape main rt_models.py")
-	initial = torch.randn((2,1,301,128))
+	initial = torch.randn((2,1,301,256))
 	initial_cond = torch.randn((2,6,1))
 	out, out_conc = enc_net(initial, initial_cond)
 		
@@ -676,17 +691,23 @@ if __name__ == "__main__":
 	#wavs are 2d
 	finalwav = finalwav.detach().squeeze(dim = 0)
 	#Their sample rate is 16k apparently
-	torchaudio.save(str(args.train_dir)+"/first.wav", finalwav, 16000)
+	print(type(finalwav), "finalwa type")
+	print(finalwav.dtype, "finalwav dtype")
+	torchaudio.save(str(args.train_dir)+"/first.wav", finalwav.type(torch.float32), 16000)
 	loss_list_1 = []
 	loss_list_2 = []
 	print(len(urmp_loader) -1, "length of urmp loader")
 	
 	file1 = open(str(args.train_dir)+"/losses1.txt", 'w')
 	file2 = open(str(args.train_dir)+"/losses2.txt", 'w')
-	for epoch in range(1):
+	file3 = open(str(args.train_dir)+"/losses3.txt", 'w')
+	for epoch in range(200):
+		print("Starting epoch ", epoch)
 		for i_batch, urmp_batch in enumerate(urmp_loader):
-		
+			if i_batch % 200 == 0:
+				print("Starting i_batch", i_batch)
 			#splitting the data taken as is since this is just processing
+			#urmp_batch = move_data2cuda(urmp_batch)
 			mix, another_mix, batch = urmp_batch
 			separated, query, another_query, pitch_target, another_pitch_target = batch
 			
@@ -700,7 +721,7 @@ if __name__ == "__main__":
 				latent_vectors = []
 				hQuery = []
 				if mode == "query":
-					print(query.shape, "testing out query shape")
+					#print(query.shape, "testing out query shape")
 					for i in range(query.shape[1]):
 						query_spec = wav2spec(config_spec, query[:,i])
 						a_query_spec = wav2spec(config_spec, another_query[:,i])
@@ -710,7 +731,7 @@ if __name__ == "__main__":
 						
 						latent_vectors.append([h, hc])
 						
-						print(h.size(), hc.size(), "h hc size from training loop")
+						#print(h.size(), hc.size(), "h hc size from training loop")
 					
 					sim = 0.
 					for i in range(query.shape[1]):
@@ -719,7 +740,7 @@ if __name__ == "__main__":
 							torch.relu(1./8. - torch.mean((latent_vectors[i][0] - latent_vectors[next_i][1])**2, dim = -1))
 							
 					sim_loss = sim.mean()/query.shape[1]
-					print(sim_loss)
+					#print(sim_loss)
 				
 				#enc and dec tra tim pitch just choose one
 				elif mode == "enc": 
@@ -765,7 +786,7 @@ if __name__ == "__main__":
 					transcription = torch.stack(pitch_transcription, 2)
 					pitch_loss = nn.CrossEntropyLoss()(transcription, align(pitch_target, transcription, -1))
 					
-					print(spec_loss, pitch_loss, "spec and pitch loss msi-dis")
+					#print(spec_loss, pitch_loss, "spec and pitch loss msi-dis")
 
 					'''
 					spec_loss.backward(retain_graph = True)
@@ -787,35 +808,27 @@ if __name__ == "__main__":
 				if mode == "query":
 				
 					op.step()
-					loss_list_1.append(sim_loss)
 					op.zero_grad()
 				else:
 					op.step()
-					loss_list_2.append(spec_loss)
 					op.zero_grad()
 					
-			file1.write(str(others_loss))
+			file1.write(str(pitch_loss))
 			file1.write("\n")
 			file2.write(str(sim_loss))
 			file2.write("\n")
+			file3.write(str(spec_loss))
+			file3.write("\n")
 			file1.close()
 			file2.close()
-			
+			file3.close()
 			file1 = open(str(args.train_dir)+"/losses1.txt", 'a')
 			file2 = open(str(args.train_dir)+"/losses2.txt", 'a')
+			file3 = open(str(args.train_dir)+"/losses3.txt", 'a')
 			del others_loss
 			del sim_loss
 
-			print("===========================================Done with ",i_batch,"================")
-	
-			if i_batch == 1:
-				file1.close()
-				file2.close()
-				break
-		
-		
-		nets_list_to_save = [enc_net, dec_net, query_net, tra_net, tim_net, pitch_net]
-		nets_names_list = ['enc', 'dec', 'query', 'tra', 'tim', 'pitch']
+			#print("===========================================Done with ",i_batch,"================")
 		
 			
 		torch.save({\
@@ -828,9 +841,11 @@ if __name__ == "__main__":
 				'pitch_state_dict' : pitch_net.state_dict(), \
 				'optimizers': optimizers},\
 				str(args.train_dir)+"/checkpoint_" + str(epoch) + ".pt")
+	file1.close()
+	file2.close()		
+	file3.close()
 		
-		
-		'''
+	'''
 		urmp_batch = urmp_batch[0]
 		print(urmp_batch.shape, "size of urmpbatch[0] r_t_models.oy")
 		urmp_batch = urmp_batch[1,:,:]
@@ -845,7 +860,7 @@ if __name__ == "__main__":
 		print(urmp_batch.shape, "size after spec2wav r_t_models.py")
 		urmp_batch = urmp_batch.detach().squeeze(dim = 0)
 		torchaudio.save("datasample2.wav", urmp_batch, 16000)
-		'''
+	'''
 		
 	'''
 
