@@ -1,5 +1,7 @@
 # EE 286 Final Project: Music Source Seperation
-Main Motivation/Reference: https://github.com/Kikyo-16/A-unified-model-for-zero-shot-musical-source-separation-transcription-and-synthesis
+Main Motivation/Reference: https://github.com/Kikyo-16/A-unified-model-for-zero-shot-musical-source-separation-transcription-and-synthesis This project is a partial reimplementation of the project by Lin et al. Since the source code is already in python the main focus was understanding the code as well as extracting the music source separation component. Some code unwrapping was also done for the model construction and training portion.
+
+1. Lin et al. A Unified Model for Zero-shot Music Source Separation, Transcription and Synthesis. 2021. https://arxiv.org/abs/2108.03456
 
 ## Quick Start
 All commands are run once you change directory from the main project. 
