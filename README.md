@@ -29,7 +29,7 @@ python3 reyes_tan_models_upgraded.py --train_dir=train_results
 ```
 
 ### 4. Evaluate the Network
-Run the following command to evaluate the network and produce the corresponding seperated music file. Note that the --epoch flag is to choose which epoch weights to evaluate. The --train_dir flag is where the training weights are stored.
+Run the following command to evaluate the network and produce the corresponding seperated music file. Note that the --epoch flag is to choose which epoch weights to evaluate. The --train_dir flag is where the training weights are stored. For this case, epoch 0 was used, but it is recommended to use the latest epoch for better results. Lastly, do note that this process consumes a lot of RAM and swap space if RAM is not enough.
 ```
 python3 separate_test.py --train_dir=train_results --eval_dir=eval_results --epoch=0
 ```
